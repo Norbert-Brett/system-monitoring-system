@@ -1,0 +1,24 @@
+# System Monitor Configuration File (YAML)
+# This file demonstrates all available configuration options
+
+# Refresh interval for metrics collection
+# Accepts duration strings like: 1s, 500ms, 2m, 1h
+interval: 2s
+
+# Enable JSON output mode instead of terminal display
+json: false
+
+# Path to log file for metrics export
+# Leave empty to disable logging
+logFile: /var/log/sysmon.log
+
+# Alert thresholds for different metrics (0-100)
+thresholds:
+  # CPU usage threshold - warning shown when exceeded
+  cpu: 80.0
+  
+  # Memory usage threshold - warning shown when exceeded
+  memory: 85.0
+  
+  # Disk usage threshold - warning shown when exceeded
+  disk: 90.0
