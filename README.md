@@ -1,17 +1,23 @@
-# System Monitor CLI
+# System Monitor CLI (`sysmon`)
 
-A real-time system monitoring tool written in Go that displays CPU usage, memory usage, disk usage, and network I/O statistics in your terminal, similar to the Unix `top` command.
+A high-performance, real-time system monitoring tool and developer companion written in Go. Designed for terminal enthusiasts and software engineers, `sysmon` provides live hardware monitoring alongside specialized developer utilities like port conflict resolution, build profiling, and environment diagnostic snapshots.
+
+---
 
 ## Features
 
-- **Real-time Metrics**: Monitor CPU, memory, disk, and network statistics
-- **Cross-Platform**: Supports Linux and macOS
-- **Colorized Output**: Terminal display with ANSI colors and threshold-based warnings
-- **JSON Mode**: Output metrics as JSON for integration with other tools
-- **Configurable**: Set refresh intervals and alert thresholds
-- **Logging**: Export metrics to a file for historical analysis
-- **Graceful Shutdown**: Clean termination with Ctrl+C
-- **Per-Core CPU**: View CPU usage for each individual core
+- **Live System Metrics**: Real-time CPU usage (overall and per-core), memory usage, disk usage, and network I/O.
+- **Accurate macOS & Linux Support**:
+  - **macOS (Darwin)**: Native Mach kernel statistics (`host_statistics64`, `HOST_CPU_LOAD_INFO`, `PROCESSOR_CPU_LOAD_INFO`) accounting for Active, Wired, and Compressed pages, with pure Go `/usr/bin/vm_stat` fallback.
+  - **Linux**: Direct `/proc/stat`, `/proc/meminfo`, and `/proc/mounts` parsing.
+- **Port & Listener Inspector (`sysmon ports`)**: Inspect all open listening ports mapped to PID, process name, tech stack, and working directory / project.
+- **Quick-Kill Port Conflict Resolver (`sysmon kill-port <port>`)**: Eliminate `EADDRINUSE` conflicts in a single keystroke.
+- **Build & Command Resource Profiler (`sysmon run <cmd>`)**: Track exact peak RSS memory consumption, user/system CPU time, and duration for builds and tests.
+- **Diagnostic Snapshot (`sysmon snapshot`)**: Generate a clean Markdown or JSON diagnostic report of host specs, developer runtimes (Go, Node, Python, Docker, Git), and active ports.
+- **Colorized Terminal & JSON Modes**: ANSI terminal dashboard with threshold alerts, plus machine-readable JSON streaming.
+- **Configurable**: Threshold-based color warnings (Green / Yellow / Red) and customizable refresh intervals.
+
+---
 
 ## Installation
 
@@ -19,7 +25,7 @@ A real-time system monitoring tool written in Go that displays CPU usage, memory
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/system-monitor-cli.git
+git clone https://github.com/sysmon/system-monitor-cli.git
 cd system-monitor-cli
 
 # Build the binary
@@ -30,67 +36,214 @@ sudo mv sysmon /usr/local/bin/
 ```
 
 ### Requirements
+- Go 1.25 or later
+- macOS (Apple Silicon or Intel) or Linux
 
-- Go 1.24 or later
-- Linux or macOS operating system
+---
 
-## Usage
+## Quick Start & Command Reference
 
-### Basic Usage
+```
+Available Commands:
+  sysmon                    Launch real-time terminal monitor
+  sysmon ports              Inspect listening ports and processes
+  sysmon kill-port <port>   Quickly terminate process on a port
+  sysmon run <command...>   Execute and profile resource usage of a command
+  sysmon snapshot           Generate developer environment & system report
+  sysmon version            Print version information
+```
 
-Start monitoring with default settings (1-second refresh interval):
+---
+
+### 1. Real-Time Monitor (`sysmon`)
+
+Launch the interactive terminal dashboard with default 1-second refresh interval:
 
 ```bash
 ./sysmon
 ```
 
-### Command-Line Flags
-
-```bash
-# Set custom refresh interval
-./sysmon --interval 2s
-
-# Output as JSON
-./sysmon --json
-
-# Log metrics to a file
-./sysmon --log-file /var/log/sysmon.log
-
-# Set custom alert thresholds
-./sysmon --cpu-threshold 90 --mem-threshold 80 --disk-threshold 95
-
-# Use a configuration file
-./sysmon --config config.yaml
-
-# Combine multiple options
-./sysmon --interval 500ms --cpu-threshold 75 --log-file metrics.log
-```
-
-### Available Flags
+#### Flags
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--interval` | Refresh interval (e.g., 1s, 500ms, 2m) | 1s |
-| `--json` | Output metrics as JSON | false |
+| `--interval` | Refresh interval (e.g. `1s`, `500ms`, `2m`) | `1s` |
+| `--json` | Output metrics as streaming JSON objects | `false` |
 | `--log-file` | Path to log file for metrics export | (none) |
-| `--config` | Path to configuration file (YAML or JSON) | (none) |
-| `--cpu-threshold` | CPU usage alert threshold (0-100) | 80 |
-| `--mem-threshold` | Memory usage alert threshold (0-100) | 85 |
-| `--disk-threshold` | Disk usage alert threshold (0-100) | 90 |
+| `--config` | Path to YAML or JSON config file | (none) |
+| `--cpu-threshold` | CPU alert threshold percentage (0–100) | `80.0` |
+| `--mem-threshold` | Memory alert threshold percentage (0–100) | `85.0` |
+| `--disk-threshold` | Disk alert threshold percentage (0–100) | `90.0` |
 
-### Commands
+#### Examples
 
 ```bash
-# Display version information
-./sysmon version
+# High-frequency 500ms monitoring
+sysmon --interval 500ms
 
-# Show help
-./sysmon --help
+# Stream JSON metrics to stdout (useful for piping into jq or files)
+sysmon --json
+
+# Set custom alert thresholds
+sysmon --cpu-threshold 75 --mem-threshold 80
 ```
+
+---
+
+### 2. Port Inspector (`sysmon ports`)
+
+Inspect all listening TCP network ports, the owning PID, process name, detected tech stack, and the associated project directory or CWD:
+
+```bash
+sysmon ports
+```
+
+**Sample Output:**
+```
+  PORT     PID      PROCESS              STACK            CATEGORY        PROJECT / CWD
+  ------------------------------------------------------------------------------------------------
+  :3000    48210    node                 Node.js/JS       Dev Server      frontend-app
+  :5432    1420     postgres             PostgreSQL       Database        /var/lib/postgresql
+  :6379    1530     redis-server         Redis            Database        /
+  :8080    51234    uvicorn              Python           Dev Server      backend-api
+  :61268   32705    language_server      LSP              Language Server /Users/alice/projects/api
+
+  Total: 5 listening ports. (Run 'sysmon kill-port <port>' to free a port)
+```
+
+#### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dev-only` | Filter out system daemons to show only dev servers, databases, containers, and LSPs |
+| `-k, --kill <port>` | Kill the process listening on the specified port |
+| `-f, --force` | Force kill using SIGKILL (when using `--kill`) |
+| `--json` | Output ports as structured JSON |
+
+#### Examples
+
+```bash
+# View only development-related servers and services
+sysmon ports --dev-only
+
+# Terminate process on port 3000 directly from ports command
+sysmon ports --kill 3000
+
+# Output ports as JSON
+sysmon ports --json | jq .
+```
+
+---
+
+### 3. Kill Port (`sysmon kill-port <port>`)
+
+Instantly terminate the process holding a network port to resolve `EADDRINUSE` conflicts without having to search for PIDs manually:
+
+```bash
+sysmon kill-port <port>
+```
+
+#### Flags
+
+| Flag | Shorthand | Description |
+|------|-----------|-------------|
+| `--force` | `-f` | Force kill immediately with `SIGKILL` (default: graceful `SIGTERM` followed by verification) |
+
+#### Examples
+
+```bash
+# Free port 3000 gracefully
+sysmon kill-port 3000
+
+# Forcefully terminate a stubborn server on port 8080
+sysmon kill-port 8080 --force
+```
+
+---
+
+### 4. Command & Build Profiler (`sysmon run <command...>`)
+
+Run any shell command, test suite, or build tool while profiling its resource usage:
+
+```bash
+sysmon run <command> [args...]
+```
+
+Tracks and reports:
+- **Peak RSS (Resident Set Size)** memory allocated by the command
+- **Duration** (wall-clock elapsed time)
+- **User CPU Time** vs. **System CPU Time**
+- **Exit Status** code
+
+#### Examples
+
+```bash
+# Profile a test suite
+sysmon run go test -v ./...
+
+# Profile a frontend build
+sysmon run -- npm run build
+
+# Profile a Rust compile
+sysmon run cargo build --release
+
+# Output profile report as JSON (ideal for CI/CD benchmarking)
+sysmon run --json go test ./...
+```
+
+**Sample Output:**
+```
+🚀 Profiling command: go test -v ./internal/stats
+
+=== RUN   TestDarwinMemoryStats
+--- PASS: TestDarwinMemoryStats (0.00s)
+PASS
+
+────────────────────────────────────────────────────────────
+📊 Execution & Resource Summary:
+  Status:       Exit Code 0
+  Duration:     130ms
+  Peak RSS:     31358976 bytes (29.91 MB)
+  User CPU:     106ms
+  System CPU:   206ms
+────────────────────────────────────────────────────────────
+```
+
+---
+
+### 5. Environment & System Snapshot (`sysmon snapshot`)
+
+Generate a comprehensive diagnostic report detailing host hardware specs, memory pressure, installed developer toolchains, and active listening ports.
+
+```bash
+sysmon snapshot
+```
+
+#### Flags
+
+| Flag | Shorthand | Description | Default |
+|------|-----------|-------------|---------|
+| `--format` | `-f` | Report format: `markdown` or `json` | `markdown` |
+| `--output` | `-o` | File path to write snapshot to | stdout |
+
+#### Examples
+
+```bash
+# Print Markdown report to terminal
+sysmon snapshot
+
+# Save snapshot to markdown file for a GitHub issue or PR
+sysmon snapshot --output env-report.md
+
+# Dump as JSON for automated audits
+sysmon snapshot --format json
+```
+
+---
 
 ## Configuration File
 
-You can use a configuration file to persist your preferences. Both YAML and JSON formats are supported.
+You can persist configuration options via `config.yaml` or `config.json`.
 
 ### YAML Example (`config.yaml`)
 
@@ -119,232 +272,73 @@ thresholds:
 }
 ```
 
-### Using Configuration Files
-
+Load configuration with `--config`:
 ```bash
-# Load configuration from file
-./sysmon --config config.yaml
-
-# Command-line flags override config file settings
-./sysmon --config config.yaml --interval 1s
+sysmon --config config.yaml
 ```
 
-Example configuration files are provided in the `examples/` directory.
+---
 
-## Output Modes
-
-### Terminal Mode (Default)
-
-Displays colorized, formatted output that updates in place:
-
-```
-System Monitor - 2024-01-15 14:30:45
-
-CPU Usage:
-  Overall:  45.23%
-  Per Core:
-    Core  0:  42.10%
-    Core  1:  48.50%
-    Core  2:  44.20%
-    Core  3:  46.10%
-
-Memory Usage:
-  Usage:     62.50%
-  Total:     16.00 GB
-  Used:      10.00 GB
-  Available:  6.00 GB
-
-Disk Usage:
-  /
-    Usage:     75.20%
-    Total:    500.00 GB
-    Used:     376.00 GB
-    Available: 124.00 GB
-
-Network I/O:
-  eth0
-    Sent:     1.50 GB (125.00 KB/s)
-    Received: 3.20 GB (250.00 KB/s)
-```
-
-### JSON Mode
-
-Outputs one JSON object per refresh interval:
-
-```bash
-./sysmon --json
-```
-
-```json
-{
-  "timestamp": "2024-01-15T14:30:45Z",
-  "cpu": {
-    "overall": 45.23,
-    "perCore": [42.1, 48.5, 44.2, 46.1]
-  },
-  "memory": {
-    "total": 17179869184,
-    "used": 10737418240,
-    "available": 6442450944,
-    "percent": 62.5
-  },
-  "disk": [
-    {
-      "mountpoint": "/",
-      "total": 536870912000,
-      "used": 403726073856,
-      "available": 133144838144,
-      "percent": 75.2
-    }
-  ],
-  "network": [
-    {
-      "interface": "eth0",
-      "bytesSent": 1610612736,
-      "bytesRecv": 3435973836,
-      "sendRate": 128000,
-      "recvRate": 256000
-    }
-  ]
-}
-```
-
-## Alert Thresholds
-
-When metrics exceed configured thresholds, warnings are displayed:
-
-- **Green**: Normal (below 80% of threshold)
-- **Yellow**: Warning (80-100% of threshold)
-- **Red**: Critical (above threshold) with ⚠ WARNING indicator
-
-## Logging
-
-Enable logging to export metrics to a file:
-
-```bash
-./sysmon --log-file /var/log/sysmon.log
-```
-
-Log entries are written in JSON format with ISO 8601 timestamps:
-
-```json
-{
-  "timestamp": "2024-01-15T14:30:45Z",
-  "metrics": { ... }
-}
-```
-
-## Graceful Shutdown
-
-Press `Ctrl+C` to stop monitoring. The application will:
-- Cancel all running goroutines
-- Flush and close log files
-- Restore terminal to original state
-- Exit with status code 0
-
-## Architecture
-
-The application follows a modular design:
-
-- **CLI Layer**: Cobra-based command-line interface
-- **Monitor Orchestrator**: Coordinates lifecycle and components
-- **Metrics Collector**: Gathers system statistics using goroutines
-- **Stats Providers**: OS-specific implementations (Linux/macOS)
-- **Renderers**: Terminal (ANSI) and JSON output formatters
-- **Logger**: File-based metrics export
-
-## Platform Support
-
-### Linux
-
-- CPU: Reads from `/proc/stat`
-- Memory: Reads from `/proc/meminfo`
-- Disk: Uses `syscall.Statfs`
-- Network: Reads from `/proc/net/dev`
-
-### macOS
-
-- CPU: Uses `syscall.Sysctl` with `kern.cp_time`
-- Memory: Uses `syscall.Sysctl` with `hw.memsize`
-- Disk: Uses `syscall.Statfs`
-- Network: Limited support (requires IOKit integration)
-
-## Troubleshooting
-
-### Permission Denied Errors
-
-Some system files may require elevated permissions:
-
-```bash
-# Run with sudo if needed
-sudo ./sysmon
-```
-
-### High CPU Usage
-
-If the monitor itself uses too much CPU, increase the refresh interval:
-
-```bash
-./sysmon --interval 5s
-```
-
-### No Network Statistics (macOS)
-
-Network statistics on macOS require additional system integration. This is a known limitation.
-
-### Configuration File Not Found
-
-Ensure the path to your configuration file is correct:
-
-```bash
-./sysmon --config /path/to/config.yaml
-```
-
-## Development
-
-### Building
-
-```bash
-go build -o sysmon .
-```
-
-### Running Tests
-
-```bash
-go test ./...
-```
-
-### Project Structure
+## Architecture & Project Structure
 
 ```
 .
-├── cmd/                    # CLI commands
-│   ├── root.go            # Root command
-│   └── version.go         # Version command
+├── cmd/
+│   ├── root.go             # Root monitor command and flags
+│   ├── ports.go            # 'ports' command (inspect & kill ports)
+│   ├── kill_port.go        # 'kill-port' shortcut command
+│   ├── run.go              # 'run' command profiler
+│   ├── snapshot.go         # 'snapshot' diagnostic report command
+│   └── version.go          # 'version' command
 ├── internal/
-│   ├── collector/         # Metrics collection
-│   ├── config/            # Configuration management
-│   ├── logger/            # File logging
-│   ├── models/            # Data structures
-│   ├── monitor/           # Orchestrator
-│   ├── render/            # Output renderers
-│   └── stats/             # OS-specific providers
-├── examples/              # Example configurations
-├── main.go               # Application entry point
-└── README.md             # This file
+│   ├── collector/          # Periodic metrics collection engine
+│   ├── config/             # Viper configuration & validation
+│   ├── dev/                # Developer utilities
+│   │   ├── detector.go     # Tech-stack and process classifier
+│   │   ├── ports.go        # Port listener inspection & process killing
+│   │   ├── profiler.go     # Command resource benchmark & rusage sampler
+│   │   ├── snapshot.go     # Diagnostic report generator
+│   │   └── types.go        # Core developer data models
+│   ├── logger/             # JSON metrics file logging
+│   ├── models/             # System metrics data models
+│   ├── monitor/            # Application lifecycle orchestrator
+│   ├── render/             # Terminal (ANSI) & JSON renderers
+│   └── stats/              # OS-specific metrics providers
+│       ├── darwin.go       # Darwin stats provider interface
+│       ├── darwin_cgo.go   # Mach kernel host_statistics64 & CPU load (Cgo)
+│       ├── darwin_nocgo.go # /usr/bin/vm_stat fallback (!Cgo)
+│       ├── linux.go        # Linux /proc provider
+│       └── mock.go         # Test mock provider
+├── examples/               # Example configuration files
+├── main.go                 # Application entrypoint
+└── README.md
 ```
+
+---
+
+## Testing
+
+Run all unit tests:
+
+```bash
+go test -v ./...
+```
+
+Run tests specifically for Darwin stats and developer modules:
+
+```bash
+# Test developer utilities
+go test -v ./internal/dev
+
+# Test Darwin OS statistics (Cgo enabled)
+CGO_ENABLED=1 go test -v ./internal/stats
+
+# Test Darwin OS statistics fallback (Cgo disabled)
+CGO_ENABLED=0 go test -v ./internal/stats
+```
+
+---
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
-
-## Acknowledgments
-
-Built with:
-- [Cobra](https://github.com/spf13/cobra) - CLI framework
-- [Viper](https://github.com/spf13/viper) - Configuration management
-- [Color](https://github.com/fatih/color) - Terminal colors
+MIT License. See [LICENSE](LICENSE) for details.
